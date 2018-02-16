@@ -1,0 +1,78 @@
+Schaltungsbeschreibung
+======================
+
+Die Schaltung besteht aus fünf einfachen Teilen:
+ - Spannungsversorgung
+ - Audioverstärker
+ - Messschaltung
+ - Anzeige
+ - µC
+
+Auswahl der Bauteile in Art und Größe war bedingt durch was sich in der Bastelkiste fand. 
+
+Spannungsversorgung
+===================
+
+Folgende Spannungen werden bereitgestellt: 
+ - Batteriespannung für Audioverstärker und OP-Amp (Vbat im Schaltplan)
+ - 3,3 Volt für µC (3V3 im Schaltplan)
+ - 3,3 Volt für analoge Komponenten inkl. AVcc des µC (AVcc im Schaltplan)
+ - Referenzspannung für Messung und A/D-Wandlung (Aref im Schaltplan)
+
+Die Spannungen werden durch 2200µF-Elkos sowie Schottky-Längsdiode D2 großzügig gepuffert, da bei Betätigung des Betriebsartwahlschalters eine kurzzeitige Unterbrechung der Batterieverbindung erfolgt. Um von Schäden durch verpolt eingesetzte Batterien zu schützen, schließt Diode D1 eine verpolte Versorgungsspannung kurz und löst die Sicherung aus. Die verwendete 1N4001 kann mit 3,7 A^2 s Belastbarkeit mittelträge Sicherungen bis ca. 700mA auslösen. Der normale Stromverbrauch der Schaltung liegt bei max. 150mA wenn der Audioverstärker aktiv ist, eine 250mA-Sicherung passt also. Diode D1 sollte keine Schottky-Diode sein aufgrund des relativen hohen Sperrstroms, Diode D2 sollte hingegen eine Schottky-Diode sein, damit wenig Spannung an ihr abfällt und auch bei geringer Restladung der Batterien noch genügend Spannung für den Spannungsregler (LP2951, low dropout) zur Verfügung steht. 
+
+Die analogen Spannungen werden durch Induktivität und Kondensatoren von Störungen auf der digitalen 3,3V-Versorgung isoliert, die Vorwärtspannung von Diode D4 (zusammen mit 4k7-Lastwiderstand) verringert die Referenzspannung Aref um ca. 0,65Volt gegenüber der 3,3V-Versorgung, da laut Datenblatt des verwendeten µC XMega32A4U Aref kleiner gleich AVcc - 0,65V gelten soll.
+
+
+
+Audioverstärker
+===============
+
+Eine Standardapplikation des LM386 gemäß Datenblatt. MOSFET und NPN-Transistor trennen den LM386 zum Stromsparen von der positiven Versorgung (Ruhestrom LM386 ohne Lautsprecher ca. 6mA)
+
+
+Messschaltung
+=============
+
+Die Sensoren der IKEA-Grillthermometer enthalten einen NTC (200k @ 25°C), wie auch die Sensoren einiger anderer Hersteller. Die nominellen Widerstandswerte sind je nach Hersteller durchaus unterschiedlich (10k … 200k). Vom Prinzip her wird das klassische reziproke Messverfahren verwendet:
+
+
+
+ Aref------------------+
+   |                   |
+  +++                  |
+  | |                  |
+  | | R0               |
+  | |                  |
+  +++    +             |
+   |     | \     +-----+-------+
+   +-----|  +----+ A/D-Wandler |
+   |     | /     +-----+-------+
+  +++/   +  Puffer     |
+  | /                  |
+  |/| NTC              |
+  / |                  |
+ /+++                  |
+   |                   |
+ Masse-----------------+
+
+Um verschiedene Sensoren bei guter Messauflösung einsetzen zu können ist der Widerstand R0 unter Verwendung eines doppelten 1:4-Multiplexers (74LV4052) umschaltbar ausgeführt, genannt HMUX in Schaltplan und Software. Es kann ein nomineller Widerstand von 1k, 10k, 100k oder 1M ausgewählt werden. Um die bestmögliche Messauflösung zu erhalten sollte R0 in der selben Größenordnung wie die des NTCs liegen. 
+
+Ein zweiter Multiplexer (genannt LMUX) erlaubt das Umschalten zwischen den beiden Sensoreingängen T1, T2, sowie die Auswahl der Kalibriergrößen R5 (10k, +/-0,01%, 5ppm/°C, -20°C – 85°C) und Masse anstelle des in der Abbildung dargestellten NTC. Die schaltbaren Widerstände für R0 sind normale Metallschichtwiderstände mit einem Temperaturkoeffizienten von bummelig +/-50ppm/°C. Um über einen weiten Temperaturbereich eine hinreichend gute Messauflösung zu erhalten, kann durch Messen des Referenzwiderstandes R5 jederzeit ein Abgleich erfolgen.  
+
+Als Puffer wird ein OP-Amp mit geringer Offsetspannung verwendet (TLC277, Offset <0,2mV, Drift <0,1µV/Monat), dessen Ausgang bis (knapp) hinunter zur negativen Versorgungsspannung (Masse) reicht. Die Messauflösung des A/D-Wandlers im µC liegt bei 1,3mV unter Verwendung von Aref=2,7Volt, der Einsatz eines präziseren (und teureren) OP-Amps ist also nicht notwendig. Der Puffer ist notwendig, da der Eingangswiderstand des A/D-Wandlers nicht bekannt ist (von 50k ist an einigen Stellen die Rede), der Ausgangswiderstand des Spannungsteilers aber erstens hoch sein kann (z.B. bei niedrigen Temperaturen wenn R0 auf 1M geschaltet ist), zweitens aber ein schnelles Umschalten der Messkanäle möglich sein soll, ein hinreichend großer Blockkondensator wie zur Messung der Batteriespannung (siehe Schaltplan) also nicht möglich ist.
+
+
+Anzeige
+=======
+
+Das verwendete historische Messinstrument misst Gleichstrom im Bereich 0–5mA. Ein einfacher Spannungs-Stromwandler wandelt die Ausgangsspannung des D/A-Wandlers (0…1Volt) in Strom. Der große schwere Zeiger des Messinstrumentes neigt sehr zum Überschwingen, auf eine Kompensation in Hardware wurde jedoch verzichtet. 
+
+
+µC
+==
+
+Hier gibt es keine Besonderheiten. 
+Die Anschlüsse PA3 und PA4 wurden mit Masse verbunden, da sie als negative Eingänge des differentiell arbeitenden A/D-Wandlers dienen (je nachdem ob Verstärkung zugeschaltet ist oder nicht ist entweder nur PA3 oder nur PA4 als Eingang wählbar). In dieser Beschaltung werden effektiv nur 11Bits des 12Bit-Wandlers genutzt, aber eine differentielle Messbrücke mit Messumschaltung erschien aufwendiger. 
+
+Alle Bedienelemente sind direkt mit GPIO-Anschlüssen verbunden, die durch Schalten mit Masse verbunden werden. Deshalb werden die interne Pull-Ups des µC aktiviert. Die Anschlüsse des Inkrementalgebers müssen auf benachbarten Eingängen eines Ports liegen, damit eine automatische Dekodierung durch die µC-Hardware erfolgen kann. Anschlüsse für eine SPI-Schnittstelle (Anschluss einer SD-Karte) und für eine USB-Buchse sind für zukünftige Erweiterungen freigehalten worden.
