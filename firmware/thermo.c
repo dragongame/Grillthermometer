@@ -182,7 +182,7 @@ void system_init(void) {
 
     // 3. set quadrature decoding as the event action for a timer/counter.
     // 8. Select event channel n as the event source for the timer/counter.
-    //     Set the period register of the timer/counter to ('line count' * 4 - 1), the line count of the quadrature encoder.
+    //     Set the period register of the timer/counter to ('line count' * 4 - 1), the line count of the quadrature encoder.
     //     Enable the timer/counter without clock prescaling.
 
     // configure C:0 and C:1 for input, pull-up, and low-level sense
@@ -403,6 +403,36 @@ void softwareReset(void) {
     RST.CTRL = 1;
 }
 
+// stellt HMUX und LMUX ein (fuers Debuggen/Kalibrieren)
+// um diese Methode anwenden zu können, darf adc_measureTemp() nicht in der main() ausgeführt werden!
+void setMUX(void) {
+    int lmux = atoi(strtok(NULL, g_separators)); // Parameter parsieren
+    int hmux = atoi(strtok(NULL, g_separators));
+
+    if (lmux >= 0 && lmux<4 && hmux>=0 && hmux<4) {
+        PORTA.OUT = (PORTA.OUT & 0b00111111) | (((uint8_t) hmux) << 6); // HMUX einstellen
+        PORTB.OUT = (PORTB.OUT & 0x03) | ((uint8_t) lmux); // LMUX einstellen
+        usart_puts_p(&USART_data, f_OK_msg);
+    } else {
+        usart_puts_p(&USART_data, f_value_err_msg);
+    }
+}
+
+// wie readADC(), aber mit direkter Kontrolle der MUXe (adc_measureTemp() darf nicht in der Hauptschleife aufgerufen werden, um Einstellungen aus setMUX() nicht zu verlieren!)
+void getADC(void) {
+    int adc_mux = atoi(strtok(NULL, g_separators)); // Parameter parsieren: MUXe des internen ADCs im differentiellen Modus
+
+    ADCA.CH0.CTRL |= ADC_CH_START_bm;       // start conversion
+    while (!(ADCA.CH0.INTFLAGS & ADC_CH_CHIF_bm)) {}    // wait for conversion to complete
+
+    ADCA.CH0.MUXCTRL = adc_mux;
+    
+    int res = ADCA.CH0.RES;
+    usart_puts_P(&USART_data, "ADC=");
+    usart_putDec(&USART_data, res);
+    usart_putc(&USART_data, '\n');
+}
+
 // Kommandointerpreter
 
 // Datenstruktur für Befehle: Name und Funktion
@@ -412,7 +442,7 @@ typedef struct {
 } Command;
 
 // Array aller Befehle im Flashspeicher
-const Command remoteCommands[] PROGMEM = {{"beep", &beep}, {"DAC", &setDisplayDAC}, {"ADC", &readADC}, {"cancelTimer", &cancelTimer}, {"setTempAlarm", &setTempAlarm}, {"ls", &SD_ls}, {"cat", &SD_cat}, {"setTimer", &setTimer}, {"cancelAlarm", &cancelAlarm}, {"reset", &softwareReset}};
+const Command remoteCommands[] PROGMEM = {{"beep", &beep}, {"DAC", &setDisplayDAC}, {"ADC", &readADC}, {"cancelTimer", &cancelTimer}, {"setTempAlarm", &setTempAlarm}, {"ls", &SD_ls}, {"cat", &SD_cat}, {"setTimer", &setTimer}, {"cancelAlarm", &cancelAlarm}, {"reset", &softwareReset}, {"setMUX", &setMUX}, {"getADC", &getADC}};
 
 // sucht passenden Befehl zu Befehlszeile, Parsieren der Parameter ist Sache der ausführenden Funktion
 void handleCommand(char* commandLine) {
