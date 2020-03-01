@@ -166,9 +166,9 @@ void system_init(void) {
     
     // Bedienschalter (Pullups einschalten)
     PORTCFG.MPCMASK = 1 | 2 | 16;
-    PORTC.PIN0CTRL = PORT_OPC_PULLUP_gc;
+    PORTC.PIN0CTRL  = PORT_OPC_PULLUP_gc;
     PORTCFG.MPCMASK = 1 | 2 | 4 | 8 | 16 | 32;
-    PORTD.PIN0CTRL = PORT_OPC_PULLUP_gc;
+    PORTD.PIN0CTRL  = PORT_OPC_PULLUP_gc;
     
     // MUXe im Messkanal konfigurieren
     PORTA.OUTSET = 64; // 10k default
@@ -210,7 +210,7 @@ void adc_init(void) {
     ADCA.CALL = readSignatureByte(offsetof(NVM_PROD_SIGNATURES_t, ADCACAL0)); //ADC Calibration Byte 0
     ADCA.CALH = readSignatureByte(offsetof(NVM_PROD_SIGNATURES_t, ADCACAL1)); //ADC Calibration Byte 1
     
-    ADCA.CH0.CTRL = ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_DIFF_gc;
+    ADCA.CH0.CTRL    = ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_DIFF_gc;
     ADCA.CH0.MUXCTRL = ADC_CH_MUXPOS_PIN1_gc | ADC_CH_MUXNEG_PIN3_gc;
     ADCA.CH0.INTCTRL = ADC_CH_INTMODE_COMPLETE_gc | ADC_CH_INTLVL_OFF_gc;
     
@@ -421,14 +421,17 @@ void setMUX(void) {
 // wie readADC(), aber mit direkter Kontrolle der MUXe (adc_measureTemp() darf nicht in der Hauptschleife aufgerufen werden, um Einstellungen aus setMUX() nicht zu verlieren!)
 void getADC(void) {
     int adc_mux = atoi(strtok(NULL, g_separators)); // Parameter parsieren: MUXe des internen ADCs im differentiellen Modus
-
+    uint8_t saved_mux = ADCA.CH0.MUXCTRL;   // Einstellung des MUX sichern
+    ADCA.CH0.MUXCTRL = adc_mux;
     ADCA.CH0.CTRL |= ADC_CH_START_bm;       // start conversion
     while (!(ADCA.CH0.INTFLAGS & ADC_CH_CHIF_bm)) {}    // wait for conversion to complete
-
-    ADCA.CH0.MUXCTRL = adc_mux;
-    
     int res = ADCA.CH0.RES;
-    usart_puts_P(&USART_data, "ADC=");
+
+    ADCA.CH0.MUXCTRL = saved_mux;
+    usart_puts_P(&USART_data, "ADC (MUX=");
+    usart_putDec(&USART_data, adc_mux);
+    usart_putc(&USART_data, ')');
+    usart_putc(&USART_data, '=');
     usart_putDec(&USART_data, res);
     usart_putc(&USART_data, '\n');
 }
@@ -622,7 +625,7 @@ int __attribute__((OS_main)) main(void) {
 
             // Umschalten der Betriebsart erkennen
             if (newMode != g_operationMode) {
-                for (i=1, j=1; j && i<MODE_BUF_COUNT; i++) {
+                for (i=0, j=1; j && i<MODE_BUF_COUNT; i++) {
                     j = (current_mode[i] == newMode);
                 }
                 if (j) {
